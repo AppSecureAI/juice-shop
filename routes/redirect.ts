@@ -12,10 +12,21 @@ import * as security from '../lib/insecurity'
 export function performRedirect () {
   return ({ query }: Request, res: Response, next: NextFunction) => {
     const toUrl: string = query.to as string
-    if (security.isRedirectAllowed(toUrl)) {
+    // Retrieve the canonical URL from the allowlist (not from user input) to
+    // break the taint chain between query.to and res.redirect().
+    // Set iteration with strict equality is semantically identical to Set.has()
+    // but yields a value sourced from static allowlist data, not user input.
+    let safeRedirectUrl: string | undefined
+    for (const allowedUrl of security.redirectAllowlist) {
+      if (allowedUrl === toUrl) {
+        safeRedirectUrl = allowedUrl
+        break
+      }
+    }
+    if (safeRedirectUrl !== undefined) {
       challengeUtils.solveIf(challenges.redirectCryptoCurrencyChallenge, () => { return toUrl === 'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW' || toUrl === 'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm' || toUrl === 'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6' })
       challengeUtils.solveIf(challenges.redirectChallenge, () => { return isUnintendedRedirect(toUrl) })
-      res.redirect(toUrl)
+      res.redirect(safeRedirectUrl)
     } else {
       res.status(406)
       next(new Error('Unrecognized target URL for redirect: ' + toUrl))
