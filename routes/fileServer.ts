@@ -4,6 +4,7 @@
  */
 
 import path from 'node:path'
+import fs from 'node:fs'
 import { type Request, type Response, type NextFunction } from 'express'
 
 import * as security from '../lib/insecurity'
@@ -29,7 +30,16 @@ export function servePublicFiles () {
       challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
       verifySuccessfulPoisonNullByteExploit(file)
 
-      res.sendFile(path.resolve('ftp/', file))
+      const directory = path.resolve('ftp/')
+      const filePath = path.resolve(directory, file)
+      const realDirectory = fs.realpathSync(directory)
+      const realFilePath = fs.realpathSync(filePath)
+      if (realFilePath.startsWith(`${realDirectory}${path.sep}`)) {
+        res.sendFile(realFilePath)
+      } else {
+        res.status(403)
+        next(new Error('File names must resolve within the ftp directory!'))
+      }
     } else {
       res.status(403)
       next(new Error('Only .md and .pdf files are allowed!'))
